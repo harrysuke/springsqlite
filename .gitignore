@@ -43,3 +43,8 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### Docker build cache dance ###
+gradle-cache-mount/
+scratch/
+
