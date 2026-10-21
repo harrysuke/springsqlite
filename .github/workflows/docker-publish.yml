@@ -53,6 +53,27 @@ jobs:
         id: setup-buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v6
+        id: gradle-cache
+        with:
+          path: gradle-cache-mount
+          key: gradle-cache-mount-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'build.gradle.kts') }}
+          restore-keys: |
+            gradle-cache-mount-${{ runner.os }}-
+
+      # BuildKit does not export `RUN --mount=type=cache` contents through
+      # --cache-to, so on a fresh CI runner the Gradle cache mount always
+      # starts empty. This action injects the saved cache into the mount
+      # before the build and extracts it again afterwards.
+      - name: Restore Docker cache mounts
+        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-dir: gradle-cache-mount
+          dockerfile: Dockerfile
+          skip-extraction: ${{ steps.gradle-cache.outputs.cache-hit }}
+
       - name: Log in to Docker Hub
         # Pull requests (including those from forks) never push, and fork PRs
         # have no access to repository secrets, so skip the login there.
@@ -74,27 +95,6 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v6
-        id: gradle-cache
-        with:
-          path: gradle-cache-mount
-          key: gradle-cache-mount-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'build.gradle.kts') }}
-          restore-keys: |
-            gradle-cache-mount-${{ runner.os }}-
-
-      # BuildKit does not export `RUN --mount=type=cache` contents through
-      # --cache-to, so on a fresh CI runner the Gradle cache mount always
-      # starts empty. This action injects the saved cache into the mount
-      # before the build and extracts it again afterwards.
-      - name: Restore Docker cache mounts
-        uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
-        with:
-          builder: ${{ steps.setup-buildx.outputs.name }}
-          cache-dir: gradle-cache-mount
-          dockerfile: Dockerfile
-          skip-extraction: ${{ steps.gradle-cache.outputs.cache-hit }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
