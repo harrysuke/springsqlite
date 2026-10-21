@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Build outputs
+build/
+bin/
+out/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local databases (never bake into image)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
