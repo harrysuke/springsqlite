@@ -1,3 +1,8 @@
 /gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+# CI-critical files must stay LF so GitHub Actions runners (Linux) do not
+# receive CRLF, which would break `run:` script blocks.
+*.yml text eol=lf
+Dockerfile text eol=lf

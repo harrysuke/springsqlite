@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Build stage ----------
-FROM gradle:9.5.1-jdk25 AS build
+# BUILDPLATFORM keeps this stage running natively on the builder machine, so
+# the (platform independent) WAR is compiled once and reused for every target
+# platform in a multi-arch build instead of being emulated under QEMU.
+FROM --platform=$BUILDPLATFORM gradle:9.5.1-jdk25 AS build
 WORKDIR /app
 
 # Copy only build descriptors first to leverage Docker layer caching
@@ -16,7 +19,10 @@ COPY . .
 # Build the executable WAR (skip tests; run them in CI separately)
 # Normalise the artifact name so the runtime stage never depends on the
 # Gradle project name / version (rootProject.name in settings.gradle.kts).
-RUN ./gradlew clean bootWar --no-daemon -x test \
+# The cache mount keeps the Gradle distribution and dependency cache across
+# builds, so repeat builds skip re-downloading them.
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew clean bootWar --no-daemon -x test \
     && cp build/libs/*.war /app/app.war
 
 # ---------- Runtime stage ----------
