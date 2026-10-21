@@ -19,8 +19,10 @@ COPY . .
 # Build the executable WAR (skip tests; run them in CI separately)
 # Normalise the artifact name so the runtime stage never depends on the
 # Gradle project name / version (rootProject.name in settings.gradle.kts).
-# The cache mount keeps the Gradle distribution and dependency cache across
-# builds, so repeat builds skip re-downloading them.
+# The cache mount keeps the Gradle distribution and dependency cache between
+# builds on the same builder. Note that BuildKit does NOT export cache mounts
+# via --cache-to, so on CI (where every run starts with a fresh builder) it
+# begins empty; it mainly speeds up local rebuilds.
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew clean bootWar --no-daemon -x test \
     && cp build/libs/*.war /app/app.war

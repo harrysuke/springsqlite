@@ -12,6 +12,12 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: harrysuke/springsqlite
 
+# Cancel superseded runs for the same ref so rapid pushes do not spawn
+# overlapping multi-arch builds.
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     name: Build and test
@@ -47,6 +53,9 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
+        # Pull requests (including those from forks) never push, and fork PRs
+        # have no access to repository secrets, so skip the login there.
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -74,4 +83,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # ignore-error keeps a flaky cache export from failing the whole
+          # publish job (the image itself is already built and pushed).
+          cache-to: type=gha,mode=max,ignore-error=true
