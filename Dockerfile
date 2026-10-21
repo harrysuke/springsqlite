@@ -14,14 +14,17 @@ RUN chmod +x ./gradlew
 COPY . .
 
 # Build the executable WAR (skip tests; run them in CI separately)
-RUN ./gradlew clean bootWar --no-daemon -x test
+# Normalise the artifact name so the runtime stage never depends on the
+# Gradle project name / version (rootProject.name in settings.gradle.kts).
+RUN ./gradlew clean bootWar --no-daemon -x test \
+    && cp build/libs/*.war /app/app.war
 
 # ---------- Runtime stage ----------
 FROM eclipse-temurin:25-jre
 WORKDIR /app
 
-# Copy the built WAR (rename to a stable name)
-COPY --from=build /app/build/libs/springjte-0.0.1-SNAPSHOT.war /app/app.war
+# Copy the built WAR (staged under a stable name by the build stage)
+COPY --from=build /app/app.war /app/app.war
 
 # Persistent data directory for the SQLite database
 RUN mkdir -p /data
