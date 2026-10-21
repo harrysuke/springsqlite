@@ -2,6 +2,11 @@
 .git
 .gitignore
 
+# CI config: not needed to build the image, and including it would
+# invalidate the source layer (and force a full Gradle rebuild) on
+# every workflow-only change.
+.github/
+
 # Build outputs
 build/
 bin/
