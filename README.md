@@ -4,6 +4,8 @@ A modern, lightweight full-stack web application starter using **Spring Boot**, 
 
 This stack eliminates heavy frontend build pipelines (like Webpack, Vite, or npm dependencies) by rendering fast, type-safe HTML templates on the server and handling dynamic page interactions using native browser APIs.
 
+> 📘 **Technical documentation:** see [TECHNICAL.md](TECHNICAL.md) for the system architecture, the SQLite entity diagram, the HTTP API reference, the security model, and the Docker/CI-CD setup.
+
 ## 🚀 Features
 * **Kotlin Backend:** Clean, idiomatic backend development using Spring Boot and Kotlin coroutines/idioms.
 * **JTE Templates:** High-performance, compile-time checked server-side rendering with Java Template Engine.
