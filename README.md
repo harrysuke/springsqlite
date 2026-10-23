@@ -1,15 +1,15 @@
-# Spring Boot (Kotlin) + JTE + Vanilla JS Fetch
+# Spring Boot (Kotlin) + JTE + Axios
 
-A modern, lightweight full-stack web application starter using **Spring Boot**, **Kotlin**, **JTE (Java Template Engine)**, and frontend interactions powered by native **Vanilla JavaScript Fetch API**.
+A modern, lightweight full-stack web application starter using **Spring Boot**, **Kotlin**, **JTE (Java Template Engine)**, and frontend interactions powered by **Axios** loaded straight from a CDN.
 
-This stack eliminates heavy frontend build pipelines (like Webpack, Vite, or npm dependencies) by rendering fast, type-safe HTML templates on the server and handling dynamic page interactions using native browser APIs.
+This stack eliminates heavy frontend build pipelines (like Webpack, Vite, or npm dependencies) by rendering fast, type-safe HTML templates on the server and handling dynamic page interactions using Axios served from jsDelivr.
 
 > 📘 **Technical documentation:** see [TECHNICAL.md](TECHNICAL.md) for the system architecture, the SQLite entity diagram, the HTTP API reference, the security model, and the Docker/CI-CD setup.
 
 ## 🚀 Features
 * **Kotlin Backend:** Clean, idiomatic backend development using Spring Boot and Kotlin coroutines/idioms.
 * **JTE Templates:** High-performance, compile-time checked server-side rendering with Java Template Engine.
-* **Zero-Dependency Frontend:** Client-side updates, form submissions, and API interactions handle smoothly via Vanilla JS `fetch()`.
+* **Zero-Build Frontend:** Client-side updates, form submissions, and API interactions handle smoothly via Axios loaded directly from a CDN — no npm install, no bundler, no build step.
 * **SQLite Database:** Embedded file-based database (`springdb.db`) — no MySQL/server setup required; schema and data managed by Flyway migrations.
 * **Gradle Wrapper:** Build and run cleanly out of the box without requiring local Gradle installations.
 
@@ -22,7 +22,7 @@ This stack eliminates heavy frontend build pipelines (like Webpack, Vite, or npm
 | **Database** | SQLite (embedded, file-based — no server required) |
 | **Schema Migration** | Flyway |
 | **Build System** | Gradle (Kotlin DSL - `build.gradle.kts`) |
-| **Frontend Utilities** | HTML5, Vanilla JavaScript (Fetch API) |
+| **Frontend Utilities** | HTML5, Axios 1.20.0 (jsDelivr CDN) |
 
 ## 📁 Repository Structure
 ```text
@@ -145,21 +145,19 @@ class HomeController {
 }
 ```
 
-### 2. Client-Side Interactions (Vanilla JS Fetch)
-Instead of importing a massive JavaScript framework, asynchronous state updates use native browser features:
+### 2. Client-Side Interactions (Axios)
+Instead of importing a massive JavaScript framework, asynchronous state updates use Axios, pulled from a CDN at runtime:
 ```javascript
-// Example frontend fetch pattern inside the HTML scripts
-fetch('/api/data', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ message: "Hello Server" })
-})
-.then(response => response.json())
-.then(data => {
+// Example frontend pattern inside the HTML scripts
+axios.post('api/users', { name: 'Alice', email: 'alice@example.com', password: 'secret12' })
+.then(({ data }) => {
     console.log('Success:', data);
     // Dynamically update DOM here
 })
-.catch(error => console.error('Error:', error));
+.catch(error => {
+    // Axios rejects on any non-2xx status; the response body is on error.response
+    console.error('Error:', error.response?.data ?? error.message);
+});
 ```
+
+Axios also handles the boilerplate for you: it serialises the JSON body, sets `Content-Type: application/json`, and reads the non-HttpOnly `XSRF-TOKEN` cookie that Spring Security publishes so it can send the matching `X-XSRF-TOKEN` header on every mutating request.

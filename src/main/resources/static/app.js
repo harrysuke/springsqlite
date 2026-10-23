@@ -1,41 +1,30 @@
-const CONTEXT_PATH = window.CONTEXT_PATH || "";
-const CSRF_TOKEN = window.CSRF_TOKEN || "";
 const form = document.getElementById("userForm");
-const formMessage = document.getElementById("formMessage");
+const message = document.getElementById("formMessage");
 
-function showMessage(kind, text) {
-  if (!formMessage) return;
-  formMessage.className = `alert alert-${kind}`;
-  formMessage.textContent = text;
+function show(kind, text) {
+  if (!message) return;
+  message.className = `alert alert-${kind}`;
+  message.textContent = text;
 }
 
-if (form) {
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = document.getElementById("name").value;
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-    showMessage("secondary", "Creating user...");
-    try {
-      const res = await fetch(`${CONTEXT_PATH}/api/users`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-XSRF-TOKEN": CSRF_TOKEN,
-        },
-        body: JSON.stringify({ name, email, password }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        showMessage("success", `User "${data.name}" created (ID ${data.id}).`);
-        form.reset();
-      } else {
-        const fields = data.fields;
-        const msg = fields ? Object.values(fields).join("; ") : data.error || "Failed to create user";
-        showMessage("danger", msg);
-      }
-    } catch (err) {
-      showMessage("danger", "Network error: " + err.message);
+form?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = Object.fromEntries(new FormData(form));
+  show("secondary", "Creating user...");
+  try {
+    // Axios reads the non-HttpOnly XSRF-TOKEN cookie and sends the
+    // X-XSRF-TOKEN header by itself; it also sets Content-Type: application/json.
+    const { data } = await axios.post("api/users", payload);
+    if (typeof data !== "object" || data === null) {
+      show("danger", "Session expired - please sign in again.");
+      return;
     }
-  });
-}
+    show("success", `User "${data.name}" created (ID ${data.id}).`);
+    form.reset();
+  } catch (err) {
+    const detail = err.response?.data ?? {};
+    show("danger", detail.fields
+      ? Object.values(detail.fields).join("; ")
+      : detail.error ?? (err.response ? `Request failed (HTTP ${err.response.status})` : "Network error"));
+  }
+});

@@ -16,13 +16,13 @@
             <form id="userForm" class="mb-3">
                 <div class="row g-2">
                     <div class="col">
-                        <input type="text" id="name" placeholder="Name" class="form-control" required>
+                        <input type="text" id="name" name="name" placeholder="Name" class="form-control" required>
                     </div>
                     <div class="col">
-                        <input type="email" id="email" placeholder="Email" class="form-control" required>
+                        <input type="email" id="email" name="email" placeholder="Email" class="form-control" required>
                     </div>
                     <div class="col">
-                        <input type="password" id="password" placeholder="Password" class="form-control" required minlength="6">
+                        <input type="password" id="password" name="password" placeholder="Password" class="form-control" required minlength="6">
                     </div>
                     <div class="col-auto">
                         <button type="submit" class="btn btn-primary">Add User</button>
@@ -32,9 +32,6 @@
             <div id="formMessage" class="alert d-none"></div>
         </main>
     </div>
-    <script>window.CONTEXT_PATH = "${contextPath}";</script>
-    <script>window.CSRF_TOKEN = "${csrf}";</script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-    <script src="${contextPath}/app.js"></script>
+    @template.fragments.scripts(contextPath = contextPath, withApp = true)
 </body>
 </html>

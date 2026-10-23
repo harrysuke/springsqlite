@@ -1,1 +1,1 @@
-rootProject.name = "springsqlite"
+rootProject.name = "springsqliteAxios"

@@ -26,7 +26,7 @@ Architecture, data model, containerization and CI/CD reference for the
 ## 1. System architecture
 
 A single-tenant user-management application rendered server-side, with a JSON
-API consumed by vanilla JavaScript.
+API consumed by Axios.
 
 | Layer | Technology | Version |
 |---|---|---|
@@ -38,13 +38,14 @@ API consumed by vanilla JavaScript.
 | Database | SQLite via `sqlite-jdbc` | 3.53.2.0 |
 | Migrations | Flyway | managed by Boot |
 | Templating | JTE (compile-time) | 3.2.4 |
+| Frontend HTTP client | Axios (jsDelivr CDN) | 1.20.0 |
 | Security | Spring Security (form login + CSRF) | managed by Boot |
 | Build | Gradle (Kotlin DSL) + wrapper | 9.5.1 |
 
 ```mermaid
 flowchart TB
     subgraph client["Browser"]
-        JS["app.js — Fetch API"]
+        JS["app.js — Axios (CDN)"]
     end
 
     subgraph app["Spring Boot application"]
@@ -92,7 +93,7 @@ flowchart TB
 ## 2. Project layout
 
 ```text
-springsqlite-master/
+springsqliteAxios/
 ├── .github/workflows/
 │   ├── ci.yml                  # build + test on push/PR to master
 │   └── docker-publish.yml      # build + push image to Docker Hub
@@ -117,8 +118,12 @@ springsqlite-master/
 │   └── resources/
 │       ├── application.properties
 │       ├── db/migration/                # V1 schema, V2 seed data
-│       ├── static/app.js                # Fetch-based create-user form
+│       ├── static/app.js                # Axios-based create-user form
 │       └── templates/                   # JTE (.jte) sources
+│           ├── fragments/               # head, navbar, sidebar, scripts
+│           ├── users/                   # form, list, edit
+│           ├── login.jte
+│           └── error.jte
 ├── Dockerfile
 ├── docker-compose.yml
 ├── build.gradle.kts
@@ -382,8 +387,14 @@ individual user** via the JSON API; only mutations are admin-gated.
 ```
 
 The token is published in a non-`HttpOnly` cookie (readable by JavaScript) and
-sent as the `X-XSRF-TOKEN` header by `app.js`, and as a `_csrf` form parameter
-by the server-rendered forms.
+sent as the `X-XSRF-TOKEN` header on the API calls made by `app.js`, and as a
+`_csrf` form parameter by the server-rendered forms.
+
+Axios performs this handshake natively: it reads the `XSRF-TOKEN` cookie and
+sets the matching `X-XSRF-TOKEN` header on every same-origin request, so
+`app.js` never has to touch the token itself. The cookie is written because
+`PageController.addCommon()` reads the token while building the model — that
+call is what triggers `CookieCsrfTokenRepository.saveToken`.
 
 ### 6.5 Session
 
@@ -410,15 +421,58 @@ errors surface at build time.
 | `fragments/head.jte` | `<head>`, Bootstrap 5.3.8 from CDN |
 | `fragments/navbar.jte` | Top navigation |
 | `fragments/sidebar.jte` | Side navigation |
+| `fragments/scripts.jte` | Vendor `<script>` tags — Bootstrap, Axios, `app.js` |
 
 Templates take typed parameters (`@param String title`,
 `@param Page<UserResponse> pageData`) and compose fragments with
 `@template.fragments.navbar(...)`.
 
-**`static/app.js`** intercepts the create-user form's submit event and posts
-JSON via `fetch`, sending the CSRF token in the `X-XSRF-TOKEN` header, then
-renders the success or validation error inline. There is no frontend build
-step, no npm and no bundler.
+### 7.1 Axios from a CDN
+
+`fragments/scripts.jte` is the single place where third-party scripts are
+declared, so a version bump is a one-line change:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios@1.20.0/dist/axios.min.js"
+        integrity="sha384-mIJWc6qj9ALoBF2yHkNOf0fbGel66+X3UkhYw57p36/PaTyDpO9pvnxrVZ7ZGJfi"
+        crossorigin="anonymous"></script>
+```
+
+Both are version-pinned and protected by Subresource Integrity, so a mutated
+file is rejected by the browser rather than executed. `crossorigin="anonymous"`
+is required for SRI to be enforced cross-origin.
+
+The fragment takes a `withApp` flag: `users/form.jte` passes `true` and also
+loads `app.js`, while `users/list.jte` and `users/edit.jte` pass `false` and
+skip the Axios download entirely, because neither page issues an XHR request.
+
+### 7.2 `static/app.js`
+
+`app.js` intercepts the create-user form's submit event and posts JSON via
+Axios, then renders the success or validation error inline. There is no
+frontend build step, no npm and no bundler.
+
+Axios removes most of the request boilerplate — it serialises the JSON body,
+sets `Content-Type: application/json`, and attaches the `X-XSRF-TOKEN` header
+by reading the `XSRF-TOKEN` cookie that Spring Security publishes. What remains
+is irreducible DOM work: locating the elements, cancelling the native submit,
+rendering the Bootstrap alert, and mapping the API's error envelope
+(`{error, fields}`) onto a human-readable sentence.
+
+Two details worth knowing:
+
+- **Relative endpoint.** `app.js` posts to `"api/users"`, resolved by the
+  browser against the document, which preserves the servlet context path
+  (`/` → `/api/users`, `/app/` → `/app/api/users`). This only holds while
+  `app.js` is loaded on a page at or directly under the context root.
+- **Expired sessions resolve successfully.** When the session lapses, the API
+  302-redirects to `/login`, the browser follows it transparently, and Axios
+  resolves with an HTML body instead of rejecting. `app.js` detects the
+  non-object payload and reports "Session expired" rather than rendering
+  `User "undefined" created`.
 
 ---
 
@@ -486,7 +540,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: harrysuke/springsqlite:latest
+    image: harrysuke/springsqliteAxios:latest
     container_name: springsqlite
     ports:
       - "8080:8080"
@@ -513,12 +567,17 @@ volumes:
 
 | Property | Value |
 |---|---|
-| Repository | `docker.io/harrysuke/springsqlite` |
+| Repository | `docker.io/harrysuke/springsqliteAxios` |
 | Tags | `latest`, `sha-<short>`, semver tags from `v*` git tags |
 | Architectures | `linux/amd64`, `linux/arm64` |
 | Compressed size | ~154 MB per architecture |
 | Uncompressed | ~566 MB |
 | Digest | `sha256:625e01049ecda1e4b21e461250e2e13debe72f78a5f265bbad21added2734a05` |
+
+> **Note:** the repository was renamed from `harrysuke/springsqlite` to
+> `harrysuke/springsqliteAxios`; the size and digest rows above were measured
+> on the image published under the previous name and are refreshed by the next
+> publish.
 
 The manifest list also carries two `unknown/unknown` entries — BuildKit
 **provenance attestations** describing how the image was built. They are
@@ -534,10 +593,10 @@ docker compose ps
 
 # Pull the published image
 docker compose pull
-docker run -d -p 8080:8080 -v springsqlite-data:/data harrysuke/springsqlite:latest
+docker run -d -p 8080:8080 -v springsqlite-data:/data harrysuke/springsqliteAxios:latest
 
 # Multi-architecture build
-docker buildx build --platform linux/amd64,linux/arm64 -t harrysuke/springsqlite:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 -t harrysuke/springsqliteAxios:latest --push .
 
 # Reset the database
 docker compose down -v && docker compose up --build
@@ -689,8 +748,8 @@ docker buildx create --name ci --driver docker-container --bootstrap
 
 docker buildx build --builder ci \
   --platform linux/amd64,linux/arm64 \
-  -t harrysuke/springsqlite:latest \
-  -t harrysuke/springsqlite:sha-$(git rev-parse --short HEAD) \
+  -t harrysuke/springsqliteAxios:latest \
+  -t harrysuke/springsqliteAxios:sha-$(git rev-parse --short HEAD) \
   --push .
 ```
 
@@ -770,7 +829,7 @@ and restart.
 - **`maximum-pool-size=1`** — SQLite allows a single writer; more connections only invite lock contention.
 - **Flyway with a data-import migration** — schema and legacy data are versioned together, so a fresh environment is reproducible.
 - **Precompiled JTE** — template errors fail the build instead of the request.
-- **No frontend build** — Bootstrap from a CDN and one vanilla `app.js` file; nothing to install or bundle.
+- **No frontend build** — Bootstrap and Axios from a CDN and one `app.js` file; nothing to install or bundle.
 - **Explicit `columns` constant in the repository** — makes the physical/logical column mismatch visible rather than implicit.
 
 **Limitations**
