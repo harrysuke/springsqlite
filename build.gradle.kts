@@ -31,6 +31,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.springframework.boot:spring-boot-starter-security")
 	implementation("org.flywaydb:flyway-core")
+	// --- Persistence (MyBatis) ---
+	// 4.1.x is the line built against Spring Boot 4.1 (Spring Framework 7 / Jakarta EE 11).
+	implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:4.1.0")
 	// --- Kotlin Support ---
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")

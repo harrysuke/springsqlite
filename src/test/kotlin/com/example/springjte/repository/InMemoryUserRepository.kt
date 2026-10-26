@@ -1,10 +1,15 @@
 package com.example.springjte.repository
 
 import com.example.springjte.model.User
-import org.springframework.jdbc.core.JdbcTemplate
 import java.util.concurrent.atomic.AtomicLong
 
-class InMemoryUserRepository : UserRepository(JdbcTemplate()) {
+/**
+ * Test double for [UserRepository] — no database, no MyBatis.
+ *
+ * It implements the interface (rather than subclassing a concrete repository) so
+ * the unit tests exercise the service layer exactly as production wires it.
+ */
+class InMemoryUserRepository : UserRepository {
 
     private val store = LinkedHashMap<Long, User>()
     private val ids = AtomicLong(0)

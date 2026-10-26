@@ -1,90 +1,36 @@
 package com.example.springjte.repository
 
 import com.example.springjte.model.User
-import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.core.RowMapper
-import org.springframework.jdbc.support.GeneratedKeyHolder
-import org.springframework.stereotype.Repository
-import java.sql.Statement
 
-@Repository
-class UserRepository(private val jdbcTemplate: JdbcTemplate) {
+/**
+ * Persistence contract for the `users` table.
+ *
+ * Production uses the MyBatis implementation
+ * ([com.example.springjte.repository.mybatis.MyBatisUserRepository] over
+ * [com.example.springjte.repository.mybatis.UserMapper]); unit tests swap in an
+ * in-memory double. Keeping this an interface is what lets the SQL layer be
+ * replaced without touching the service, the security config or the controllers.
+ */
+interface UserRepository {
 
-    private val columns = "id, name, email, password, role"
+    /** All users, ordered by id; [search] matches name or email when not blank. */
+    fun findAll(search: String? = null): List<User>
 
-    private val rowMapper = RowMapper<User> { rs, _ ->
-        User(
-            id = rs.getLong("id"),
-            name = rs.getString("name"),
-            email = rs.getString("email"),
-            password = rs.getString("password"),
-            role = rs.getString("role")
-        )
-    }
+    /** One page of [findAll], starting at [offset]. */
+    fun findPage(search: String?, offset: Int, limit: Int): List<User>
 
-    fun findAll(search: String? = null): List<User> {
-        val keyword = search?.trim()?.takeIf { it.isNotEmpty() }
-        val sql = if (keyword == null) {
-            "SELECT $columns FROM users ORDER BY id"
-        } else {
-            "SELECT $columns FROM users WHERE name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' ORDER BY id"
-        }
-        return if (keyword == null) jdbcTemplate.query(sql, rowMapper)
-        else jdbcTemplate.query(sql, rowMapper, like(keyword), like(keyword))
-    }
+    /** Number of rows [findAll] would return for [search]. */
+    fun count(search: String? = null): Long
 
-    fun findPage(search: String?, offset: Int, limit: Int): List<User> {
-        val keyword = search?.trim()?.takeIf { it.isNotEmpty() }
-        val sql = if (keyword == null) {
-            "SELECT $columns FROM users ORDER BY id LIMIT ? OFFSET ?"
-        } else {
-            "SELECT $columns FROM users WHERE name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' ORDER BY id LIMIT ? OFFSET ?"
-        }
-        return if (keyword == null) jdbcTemplate.query(sql, rowMapper, limit, offset)
-        else jdbcTemplate.query(sql, rowMapper, like(keyword), like(keyword), limit, offset)
-    }
+    fun findById(id: Long): User?
 
-    fun count(search: String? = null): Long {
-        val keyword = search?.trim()?.takeIf { it.isNotEmpty() }
-        val sql = if (keyword == null) "SELECT COUNT(*) FROM users"
-        else "SELECT COUNT(*) FROM users WHERE name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\'"
-        return if (keyword == null) jdbcTemplate.queryForObject(sql, Long::class.java) ?: 0L
-        else jdbcTemplate.queryForObject(sql, Long::class.java, like(keyword), like(keyword)) ?: 0L
-    }
+    fun findByEmail(email: String): User?
 
-    fun findById(id: Long): User? =
-        jdbcTemplate.query("SELECT $columns FROM users WHERE id = ?", rowMapper, id).firstOrNull()
+    /** Inserts [user] and returns the generated primary key. */
+    fun save(user: User): Long
 
-    fun findByEmail(email: String): User? =
-        jdbcTemplate.query("SELECT $columns FROM users WHERE email = ?", rowMapper, email).firstOrNull()
+    /** Updates every column except the key; returns the affected row count. */
+    fun update(user: User): Int
 
-    fun save(user: User): Long {
-        val keyHolder = GeneratedKeyHolder()
-        jdbcTemplate.update(
-            { connection ->
-                connection.prepareStatement(
-                    "INSERT INTO users (name, email, password, role, email_verified) VALUES (?, ?, ?, ?, 0)",
-                    Statement.RETURN_GENERATED_KEYS
-                ).apply {
-                    setString(1, user.name)
-                    setString(2, user.email)
-                    setString(3, user.password)
-                    setString(4, user.role ?: "ROLE_USER")
-                }
-            },
-            keyHolder
-        )
-        return keyHolder.key?.toLong() ?: throw IllegalStateException("No generated key returned for user insert")
-    }
-
-    fun update(user: User): Int =
-        jdbcTemplate.update(
-            "UPDATE users SET name = ?, email = ?, password = ?, role = ? WHERE id = ?",
-            user.name, user.email, user.password, user.role ?: "ROLE_USER", user.id
-        )
-
-    fun deleteById(id: Long): Int = jdbcTemplate.update("DELETE FROM users WHERE id = ?", id)
-
-    private fun like(keyword: String): String =
-        "%" + keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    fun deleteById(id: Long): Int
 }

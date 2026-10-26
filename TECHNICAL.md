@@ -34,7 +34,7 @@ API consumed by Axios.
 | Runtime | Java (Temurin) | 25 |
 | Framework | Spring Boot | 4.1.0 |
 | Web | Spring WebMVC + embedded Tomcat | 11.0.22 |
-| Persistence | Spring JDBC (`JdbcTemplate`) + HikariCP | — |
+| Persistence | MyBatis (`mybatis-spring-boot-starter`) + HikariCP | 4.1.0 |
 | Database | SQLite via `sqlite-jdbc` | 3.53.2.0 |
 | Migrations | Flyway | managed by Boot |
 | Templating | JTE (compile-time) | 3.2.4 |
@@ -54,7 +54,7 @@ flowchart TB
         PC["PageController<br/>JTE views"]
         API["UserApiController<br/>JSON"]
         SVC["UserService<br/>validation · BCrypt · transactions"]
-        REPO["UserRepository<br/>JdbcTemplate"]
+        REPO["UserRepository<br/>MyBatis · UserMapper.xml"]
         JTE["JTE templates<br/>precompiled"]
         SEC --> PC & API
         PC --> JTE
@@ -78,14 +78,16 @@ flowchart TB
 1. `SecurityFilterChain` resolves the session principal; unauthenticated → `302 /login`.
 2. `PageController.list()` collects shared model attributes (`contextPath`, `csrf`, `currentUser`) and page parameters.
 3. `UserService.findPage()` clamps `page ≥ 1` and `size ∈ [1,100]`, computes the offset.
-4. `UserRepository` runs a parameterised `SELECT … LIMIT ? OFFSET ?` plus a `COUNT(*)`.
+4. `MyBatisUserRepository` calls `UserMapper`, which executes the `findPage` and
+   `count` statements from `mappers/UserMapper.xml` (`LIMIT ? OFFSET ?` plus a
+   `COUNT(*)`), binding parameters as `?` placeholders.
 5. JTE compiles `users/list.jte` to Java bytecode at build time; rendering produces HTML.
 
 **Request lifecycle (JSON API, e.g. `POST /api/users`):**
 
 1. Security checks the `ROLE_ADMIN` authority.
 2. `UserApiController.create()` → `@Valid` on `UserRequest` (Bean Validation).
-3. `UserService.create()` → `@Transactional`; lowercases the email, rejects duplicates with `409`, BCrypt-hashes the password, inserts with a `GeneratedKeyHolder`.
+3. `UserService.create()` → `@Transactional`; lowercases the email, rejects duplicates with `409`, BCrypt-hashes the password, inserts through `UserMapper.insert` (`useGeneratedKeys`).
 4. `ApiExceptionHandler` maps validation → `400 {error, fields}`, `ResponseStatusException` → its status, anything else → `500`.
 
 ---
@@ -93,7 +95,7 @@ flowchart TB
 ## 2. Project layout
 
 ```text
-springsqliteAxios/
+springsqliteMyBatis/
 ├── .github/workflows/
 │   ├── ci.yml                  # build + test on push/PR to master
 │   └── docker-publish.yml      # build + push image to Docker Hub
@@ -109,14 +111,19 @@ springsqliteAxios/
 │   │   │   └── LoginController.kt       # GET /login
 │   │   ├── dto/UserRequest.kt           # inbound, Bean Validation
 │   │   ├── dto/UserResponse.kt          # outbound (never carries the hash)
-│   │   ├── model/User.kt                # persistence model
+│   │   ├── config/MyBatisConfig.kt      # @MapperScan for the MyBatis mappers
+│   │   ├── model/User.kt                # persistence model (mutable, MyBatis bean)
 │   │   ├── model/Page.kt                # pagination envelope
-│   │   ├── repository/UserRepository.kt # JdbcTemplate SQL
+│   │   ├── repository/UserRepository.kt # persistence contract (interface)
+│   │   ├── repository/mybatis/
+│   │   │   ├── UserMapper.kt            # @Mapper interface (no implementation)
+│   │   │   └── MyBatisUserRepository.kt # adapter: LIKE escaping, generated key
 │   │   ├── security/SecurityConfig.kt   # filter chain, roles, CSRF
 │   │   ├── service/UserService.kt       # business rules, BCrypt, @Transactional
 │   │   └── web/                         # ApiExceptionHandler, WebUtils
 │   └── resources/
 │       ├── application.properties
+│       ├── mappers/UserMapper.xml       # every SQL statement
 │       ├── db/migration/                # V1 schema, V2 seed data
 │       ├── static/app.js                # Axios-based create-user form
 │       └── templates/                   # JTE (.jte) sources
@@ -203,12 +210,15 @@ expressed in application code, not in the database.
 
 ### 3.3 Logical vs. physical model
 
-The physical table has 8 columns; the Kotlin persistence model exposes 5. This
-mapping is explicit in `UserRepository.columns`:
+The physical table has 8 columns; the Kotlin persistence model exposes 5. The
+column list is declared once in the mapper and included by every read statement:
 
-```kotlin
-private val columns = "id, name, email, password, role"
+```xml
+<sql id="columns">id, name, email, password, role</sql>
 ```
+
+MyBatis maps the columns onto the `User` properties by name (`resultType`), so no
+explicit result map is needed.
 
 | Physical column | `User` (Kotlin) | `UserResponse` (API) |
 |---|---|---|
@@ -250,7 +260,7 @@ already present.
 |---|---|---|
 | `model` | Persistence entities and pagination envelope | — |
 | `dto` | Request/response contracts with validation annotations | `jakarta.validation` |
-| `repository` | All SQL, all `JdbcTemplate` calls | `model`, Spring JDBC |
+| `repository` | Persistence contract + the MyBatis mapper and its adapter | `model`, MyBatis |
 | `service` | Business rules, password hashing, transaction boundaries | `repository`, `model`, `dto` |
 | `controller` | HTTP mapping; server views vs. JSON | `service`, `dto`, `model` |
 | `security` | Filter chain, `UserDetailsService`, password encoder | `repository`, `model` |
@@ -266,7 +276,7 @@ The dependency direction is strictly inward: `controller → service → reposit
 
 1. Bean Validation on `UserRequest`: name 2–50 chars, valid email, password 6–72 chars.
 2. `UserService.create()` — `@Transactional`; email trimmed and lowercased; duplicate → `409 Conflict`; password → `BCryptPasswordEncoder.encode()`.
-3. `UserRepository.save()` — `INSERT` with `Statement.RETURN_GENERATED_KEYS` and a `GeneratedKeyHolder`; `email_verified` is written as `0`; role defaults to `ROLE_USER`.
+3. `UserRepository.save()` — `UserMapper.insert` runs the `INSERT` with `useGeneratedKeys="true" keyProperty="id"`, so SQLite's new rowid lands in `user.id`; `email_verified` is written as `0`; a null role becomes `ROLE_USER` via `coalesce`.
 4. The row is re-read and mapped to `UserResponse` (no hash).
 
 **Update a user (`PUT /api/users/{id}`)** — the email-uniqueness check excludes
@@ -275,9 +285,72 @@ email. A blank password means "keep the existing hash" rather than "set an
 empty password".
 
 **Search and pagination (`GET /users`)** — `page` is clamped to ≥ 1 and `size`
-to `[1,100]`. The `LIKE` pattern escapes `\`, `%` and `_` and the query uses
-`ESCAPE '\'`, so user input cannot inject wildcards. `Page<T>` derives
+to `[1,100]`. `MyBatisUserRepository` turns the term into `%keyword%` and escapes
+`\`, `%` and `_`; the XML uses `ESCAPE '\'`, so user input cannot inject
+wildcards. The `WHERE` clause itself is a `<sql id="searchFilter">` fragment with
+an `<if test="pattern != null">`, shared by `findAll`, `findPage` and `count`. `Page<T>` derives
 `totalPages`, `hasPrevious` and `hasNext` as computed properties.
+
+### 4.3 Persistence layer (MyBatis)
+
+Four small pieces replace the previous `JdbcTemplate` class:
+
+```text
+UserService ──► UserRepository (interface)          repository/UserRepository.kt
+                     ▲
+                     │ implements
+          MyBatisUserRepository ──► UserMapper (@Mapper)   repository/mybatis/
+                                          ▲
+                                          │ statements generated from
+                                   resources/mappers/UserMapper.xml
+```
+
+| Concern | Where it lives |
+|---|---|
+| SQL text, dynamic `WHERE`, `LIMIT/OFFSET` | `UserMapper.xml` |
+| Method → statement binding | `namespace` = mapper FQN, `id` = method name |
+| Generated key | `<insert useGeneratedKeys="true" keyProperty="id" keyColumn="id">` |
+| LIKE escaping (`\`, `%`, `_`) | `MyBatisUserRepository.pattern()` — kept in Kotlin so it is unit-testable |
+| Mapper bean registration | `config/MyBatisConfig.kt` (`@MapperScan`) |
+| Session factory, DataSource, transactions | Spring Boot auto-configuration + `spring-boot-starter-jdbc` |
+
+**Configuration** (`application.properties`):
+
+```properties
+mybatis.mapper-locations=classpath:mappers/*.xml
+mybatis.type-aliases-package=com.example.springjte.model
+mybatis.configuration.map-underscore-to-camel-case=true
+mybatis.configuration.jdbc-type-for-null=NULL
+```
+
+**Transactions.** `UserService.create/update/delete` are `@Transactional`, so the
+mapper participates in the Spring-managed transaction over the same connection.
+MyBatis needs no extra configuration for that — `MyBatisUserRepository` is a plain
+`@Repository` and the mapper is a proxied bean.
+
+**Adding a statement.** Add the method to `UserMapper` (every parameter annotated
+with `@Param`), add a statement with the same id to the XML, then expose it on
+`UserRepository` if the service needs it.
+
+**Tests.** `MyBatisUserRepositoryTest` runs the real XML against a real SQLite file
+(migrations included), so it catches broken statements, wrong `namespace`/`id`
+pairs and escaping regressions; `InMemoryUserRepository` keeps the service and
+controller tests database-free.
+
+**Gotchas worth remembering**
+
+* **Kotlin parameter names.** Kotlin does not write parameter names into the class
+  file by default, so `#{pattern}` only resolves because of `@Param("pattern")`.
+* **Mutable entity.** MyBatis fills entities through a no-arg constructor and
+  setters, and `useGeneratedKeys` needs a writable `id`; hence `User` uses `var`.
+* **`@MapperScan` placement.** It lives in a `@Configuration` class, not on
+  `SpringjteApplication`: `@WebMvcTest` loads the application class and would try
+  to build the mappers without a `DataSource` (*"Property 'sqlSessionFactory' or
+  'sqlSessionTemplate' are required"*).
+* **Null parameters.** `mybatis.configuration.jdbc-type-for-null=NULL` is required
+  for `#{role}` to bind as SQL `NULL` on SQLite.
+* **SQL logging.** `logging.level.com.example.springjte.repository.mybatis=DEBUG`
+  prints `==>  Preparing: …` / `<==      Total: …` per statement.
 
 ---
 
@@ -768,6 +841,11 @@ docker buildx build --builder ci \
 | `gg.jte.template-suffix` | `.jte` | — |
 | `gg.jte.use-precompiled-templates` | `true` | Templates compiled at build time |
 | `spring.flyway.enabled` | `true` | Migrations run at startup |
+| `mybatis.mapper-locations` | `classpath:mappers/*.xml` | Where the mapper XML files live |
+| `mybatis.type-aliases-package` | `com.example.springjte.model` | Lets `resultType` use `User` instead of the FQN |
+| `mybatis.configuration.map-underscore-to-camel-case` | `true` | `email_verified` → `emailVerified` |
+| `mybatis.configuration.jdbc-type-for-null` | `NULL` | Binds a null `#{role}` as SQL `NULL` |
+| `logging.level.com.example.springjte.repository.mybatis` | — | Set to `DEBUG` to log every statement |
 
 ### Environment variables
 
@@ -825,12 +903,17 @@ and restart.
 **Decisions**
 
 - **SQLite over a client/server database** — zero-setup, file-based; appropriate for a single-tenant app.
-- **`JdbcTemplate` over JPA** — the schema is trivial; hand-written SQL keeps the mapping explicit and avoids Hibernate/SQLite dialect friction.
+- **MyBatis over JPA** — the schema is trivial; hand-written SQL keeps the mapping
+  explicit, avoids Hibernate/SQLite dialect friction, and keeps the dynamic search
+  filter in one `<if>` instead of a criteria API.
 - **`maximum-pool-size=1`** — SQLite allows a single writer; more connections only invite lock contention.
 - **Flyway with a data-import migration** — schema and legacy data are versioned together, so a fresh environment is reproducible.
 - **Precompiled JTE** — template errors fail the build instead of the request.
 - **No frontend build** — Bootstrap and Axios from a CDN and one `app.js` file; nothing to install or bundle.
-- **Explicit `columns` constant in the repository** — makes the physical/logical column mismatch visible rather than implicit.
+- **Explicit `columns` fragment in the mapper** — makes the physical/logical column
+  mismatch visible rather than implicit.
+- **A repository interface in front of the mapper** — lets unit tests swap in an
+  in-memory double, and keeps the SQL layer replaceable.
 
 **Limitations**
 

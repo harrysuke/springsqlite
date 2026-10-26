@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: harrysuke/springsqliteAxios:latest
+    image: harrysuke/springsqliteMyBatis:latest
     container_name: springsqlite
     ports:
       - "8080:8080"
