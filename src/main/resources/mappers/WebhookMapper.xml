@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.springjte.repository.mybatis.WebhookMapper">
+
+    <sql id="columns">id, url, description, event_types, active, secret, created_at</sql>
+
+    <select id="findAll" resultType="com.example.springjte.model.Webhook">
+        SELECT <include refid="columns"/>
+          FROM webhooks
+         ORDER BY id DESC
+    </select>
+
+    <select id="findActive" resultType="com.example.springjte.model.Webhook">
+        SELECT <include refid="columns"/>
+          FROM webhooks
+         WHERE active = 1
+         ORDER BY id DESC
+    </select>
+
+    <select id="findByEventTypesContaining" resultType="com.example.springjte.model.Webhook">
+        SELECT <include refid="columns"/>
+          FROM webhooks
+         WHERE active = 1
+           AND (event_types = '*' OR event_types LIKE '%' || #{eventType} || '%')
+         ORDER BY id DESC
+    </select>
+
+    <select id="findById" resultType="com.example.springjte.model.Webhook">
+        SELECT <include refid="columns"/>
+          FROM webhooks
+         WHERE id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.example.springjte.model.Webhook"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO webhooks (url, description, event_types, active, secret)
+        VALUES (#{url}, #{description}, coalesce(#{eventTypes}, '*'), 1, #{secret})
+    </insert>
+
+    <update id="update" parameterType="com.example.springjte.model.Webhook">
+        UPDATE webhooks
+           SET url = #{url},
+               description = #{description},
+               event_types = coalesce(#{eventTypes}, '*'),
+               active = #{active},
+               secret = #{secret}
+         WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM webhooks WHERE id = #{id}
+    </delete>
+
+    <select id="countActive" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM webhooks WHERE active = 1
+    </select>
+
+</mapper>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.springjte.repository.mybatis.UsageEventMapper">
+
+    <sql id="columns">id, event_type, endpoint, method, user_email, api_key_id,
+                      status_code, duration_ms, created_at</sql>
+
+    <insert id="insert" parameterType="com.example.springjte.model.UsageEvent"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO usage_events (event_type, endpoint, method, user_email, api_key_id,
+                                  status_code, duration_ms)
+        VALUES (#{eventType}, #{endpoint}, #{method}, #{userEmail}, #{apiKeyId},
+                #{statusCode}, #{durationMs})
+    </insert>
+
+    <select id="findRecent" resultType="com.example.springjte.model.UsageEvent">
+        SELECT <include refid="columns"/>
+          FROM usage_events
+         ORDER BY id DESC
+         LIMIT #{limit}
+    </select>
+
+    <select id="countAll" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM usage_events
+    </select>
+
+    <select id="countByEndpoint" resultType="java.util.Map">
+        SELECT endpoint AS endpoint, COUNT(*) AS cnt
+          FROM usage_events
+         WHERE endpoint IS NOT NULL
+         GROUP BY endpoint
+         ORDER BY cnt DESC
+         LIMIT 10
+    </select>
+
+    <select id="countByMethod" resultType="java.util.Map">
+        SELECT method AS method, COUNT(*) AS cnt
+          FROM usage_events
+         WHERE method IS NOT NULL
+         GROUP BY method
+         ORDER BY cnt DESC
+    </select>
+
+    <select id="countByStatus" resultType="java.util.Map">
+        SELECT CAST(status_code AS TEXT) AS status, COUNT(*) AS cnt
+          FROM usage_events
+         WHERE status_code IS NOT NULL
+         GROUP BY status_code
+         ORDER BY status
+    </select>
+
+    <select id="countDaily" resultType="java.util.Map">
+        SELECT substr(created_at, 1, 10) AS date, COUNT(*) AS cnt
+          FROM usage_events
+         WHERE created_at >= date('now', '-' || #{days} || ' days')
+         GROUP BY substr(created_at, 1, 10)
+         ORDER BY date DESC
+    </select>
+
+</mapper>

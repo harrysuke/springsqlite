@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# CI config: not needed to build the image, and including it would
+# invalidate the source layer (and force a full Gradle rebuild) on
+# every workflow-only change.
+.github/
+
+# Build outputs
+build/
+bin/
+out/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local databases (never bake into image)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml

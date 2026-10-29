@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.springjte.repository.mybatis.WebhookDeliveryMapper">
+
+    <sql id="columns">id, webhook_id, event_type, payload, response_status, response_body,
+                      success, attempt_count, created_at</sql>
+
+    <select id="findByWebhookId" resultType="com.example.springjte.model.WebhookDelivery">
+        SELECT <include refid="columns"/>
+          FROM webhook_deliveries
+         WHERE webhook_id = #{webhookId}
+         ORDER BY id DESC
+    </select>
+
+    <select id="findRecent" resultType="com.example.springjte.model.WebhookDelivery">
+        SELECT <include refid="columns"/>
+          FROM webhook_deliveries
+         ORDER BY id DESC
+         LIMIT #{limit}
+    </select>
+
+    <insert id="insert" parameterType="com.example.springjte.model.WebhookDelivery"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO webhook_deliveries (webhook_id, event_type, payload, response_status,
+                                        response_body, success, attempt_count)
+        VALUES (#{webhookId}, #{eventType}, #{payload}, #{responseStatus},
+                #{responseBody}, #{success}, #{attemptCount})
+    </insert>
+
+    <update id="update" parameterType="com.example.springjte.model.WebhookDelivery">
+        UPDATE webhook_deliveries
+           SET response_status = #{responseStatus},
+               response_body = #{responseBody},
+               success = #{success},
+               attempt_count = #{attemptCount}
+         WHERE id = #{id}
+    </update>
+
+    <select id="countFailed" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM webhook_deliveries WHERE success = 0
+    </select>
+
+</mapper>

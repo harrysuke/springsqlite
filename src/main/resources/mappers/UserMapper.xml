@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  SQL for com.example.springjte.repository.mybatis.UserMapper.
+
+  Statement ids must match the mapper method names; the namespace must be the
+  mapper interface's FQN. Column names are mapped to the `User` properties by
+  name, so `resultType` needs no explicit result map.
+-->
+<mapper namespace="com.example.springjte.repository.mybatis.UserMapper">
+
+    <sql id="columns">id, name, email, password, role</sql>
+
+    <!--
+      Shared WHERE clause for the three read paths.
+
+      `pattern` is null when the search box is empty, which is what makes this
+      dynamic SQL: one fragment, no string concatenation in Kotlin, and the
+      filter is dropped entirely (no `WHERE 1=1` hack) when there is nothing to
+      search for.
+
+      The pattern arrives already escaped — %, _ and \ are backslash-escaped by
+      MyBatisUserRepository — so ESCAPE '\' makes those characters literal and a
+      search for "50%" cannot match everything.
+    -->
+    <sql id="searchFilter">
+        <if test="pattern != null">
+            WHERE name LIKE #{pattern} ESCAPE '\'
+               OR email LIKE #{pattern} ESCAPE '\'
+        </if>
+    </sql>
+
+    <select id="findAll" resultType="com.example.springjte.model.User">
+        SELECT <include refid="columns"/>
+          FROM users
+        <include refid="searchFilter"/>
+         ORDER BY id
+    </select>
+
+    <select id="findPage" resultType="com.example.springjte.model.User">
+        SELECT <include refid="columns"/>
+          FROM users
+        <include refid="searchFilter"/>
+         ORDER BY id
+         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="java.lang.Long">
+        SELECT COUNT(*)
+          FROM users
+        <include refid="searchFilter"/>
+    </select>
+
+    <select id="findById" resultType="com.example.springjte.model.User">
+        SELECT <include refid="columns"/>
+          FROM users
+         WHERE id = #{id}
+    </select>
+
+    <select id="findByEmail" resultType="com.example.springjte.model.User">
+        SELECT <include refid="columns"/>
+          FROM users
+         WHERE email = #{email}
+    </select>
+
+    <!--
+      useGeneratedKeys + keyProperty="id" replaces the old
+      Statement.RETURN_GENERATED_KEYS / GeneratedKeyHolder dance: SQLite's
+      last_insert_rowid() is read by the driver and written into user.id.
+    -->
+    <insert id="insert" parameterType="com.example.springjte.model.User"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO users (name, email, password, role, email_verified)
+        VALUES (#{name}, #{email}, #{password}, coalesce(#{role}, 'ROLE_USER'), 0)
+    </insert>
+
+    <update id="update" parameterType="com.example.springjte.model.User">
+        UPDATE users
+           SET name = #{name},
+               email = #{email},
+               password = #{password},
+               role = coalesce(#{role}, 'ROLE_USER')
+         WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM users WHERE id = #{id}
+    </delete>
+
+</mapper>

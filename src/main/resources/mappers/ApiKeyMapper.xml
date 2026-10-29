@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.springjte.repository.mybatis.ApiKeyMapper">
+
+    <sql id="columns">id, key_value, name, user_email, active, created_at, last_used_at</sql>
+
+    <select id="findAll" resultType="com.example.springjte.model.ApiKey">
+        SELECT <include refid="columns"/>
+          FROM api_keys
+         ORDER BY id DESC
+    </select>
+
+    <select id="findActive" resultType="com.example.springjte.model.ApiKey">
+        SELECT <include refid="columns"/>
+          FROM api_keys
+         WHERE active = 1
+         ORDER BY id DESC
+    </select>
+
+    <select id="findById" resultType="com.example.springjte.model.ApiKey">
+        SELECT <include refid="columns"/>
+          FROM api_keys
+         WHERE id = #{id}
+    </select>
+
+    <select id="findByKeyValue" resultType="com.example.springjte.model.ApiKey">
+        SELECT <include refid="columns"/>
+          FROM api_keys
+         WHERE key_value = #{keyValue}
+           AND active = 1
+    </select>
+
+    <insert id="insert" parameterType="com.example.springjte.model.ApiKey"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO api_keys (key_value, name, user_email, active)
+        VALUES (#{keyValue}, #{name}, #{userEmail}, 1)
+    </insert>
+
+    <update id="update" parameterType="com.example.springjte.model.ApiKey">
+        UPDATE api_keys
+           SET name = #{name},
+               user_email = #{userEmail},
+               active = #{active}
+         WHERE id = #{id}
+    </update>
+
+    <update id="updateLastUsed">
+        UPDATE api_keys
+           SET last_used_at = datetime('now')
+         WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM api_keys WHERE id = #{id}
+    </delete>
+
+    <select id="count" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM api_keys
+    </select>
+
+</mapper>

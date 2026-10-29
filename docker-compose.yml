@@ -1,0 +1,18 @@
+services:
+  springsqlite:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: harrysuke/springsqlitemybatis:latest
+    container_name: springsqlite
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:sqlite:/data/springdb.db
+    volumes:
+      - springsqlite-data:/data
+    restart: unless-stopped
+
+volumes:
+  springsqlite-data:
+    name: springsqlite-data
