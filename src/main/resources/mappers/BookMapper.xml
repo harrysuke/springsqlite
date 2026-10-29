@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  SQL for com.example.springjte.repository.mybatis.BookMapper.
+
+  Statement ids must match the mapper method names; the namespace must be the
+  mapper interface's FQN. Column names are mapped to the `Book` properties by
+  name, so `resultType` needs no explicit result map.
+
+  This is the SQLite replacement for the T-SQL procedures the ASP.NET Core
+  version called (BookViewAll, BookViewById, BookAdd, BookEdit, BookAddOrEdit,
+  BookDeleteById, BookSearchByTitle).
+-->
+<mapper namespace="com.example.springjte.repository.mybatis.BookMapper">
+
+    <sql id="columns">id, title, author, price</sql>
+
+    <!--
+      Shared WHERE clause for the read paths.
+
+      `pattern` is null when the search box is empty, which is what makes this
+      dynamic SQL: the filter is dropped entirely when there is nothing to search
+      for. It arrives already lower-cased and escaped by MyBatisBookRepository,
+      so `lower()` on both sides gives a case-insensitive match and ESCAPE '\'
+      keeps %, _ and \ literal.
+    -->
+    <sql id="searchFilter">
+        <if test="pattern != null">
+            WHERE lower(title) LIKE #{pattern} ESCAPE '\'
+               OR lower(author) LIKE #{pattern} ESCAPE '\'
+        </if>
+    </sql>
+
+    <select id="findAll" resultType="com.example.springjte.model.Book">
+        SELECT <include refid="columns"/>
+          FROM books
+        <include refid="searchFilter"/>
+         ORDER BY id
+    </select>
+
+    <select id="findPage" resultType="com.example.springjte.model.Book">
+        SELECT <include refid="columns"/>
+          FROM books
+        <include refid="searchFilter"/>
+         ORDER BY id
+         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="java.lang.Long">
+        SELECT COUNT(*)
+          FROM books
+        <include refid="searchFilter"/>
+    </select>
+
+    <select id="findById" resultType="com.example.springjte.model.Book">
+        SELECT <include refid="columns"/>
+          FROM books
+         WHERE id = #{id}
+    </select>
+
+    <!-- useGeneratedKeys writes SQLite's last_insert_rowid() back into book.id. -->
+    <insert id="insert" parameterType="com.example.springjte.model.Book"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO books (title, author, price)
+        VALUES (#{title}, #{author}, #{price})
+    </insert>
+
+    <update id="update" parameterType="com.example.springjte.model.Book">
+        UPDATE books
+           SET title = #{title},
+               author = #{author},
+               price = #{price}
+         WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM books WHERE id = #{id}
+    </delete>
+
+</mapper>

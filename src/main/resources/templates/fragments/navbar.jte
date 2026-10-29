@@ -10,6 +10,7 @@
     <div class="d-flex align-items-center ms-auto">
         <a class="nav-link" href="${contextPath}/saas/dashboard">Dashboard</a>
         <a class="nav-link" href="${contextPath}/users">Users</a>
+        <a class="nav-link" href="${contextPath}/books">Books</a>
         @if (currentUser != null && !currentUser.isEmpty())
         <span class="navbar-text px-3 d-none d-sm-inline">${currentUser}</span>
         <form class="d-inline" method="post" action="${contextPath}/logout">

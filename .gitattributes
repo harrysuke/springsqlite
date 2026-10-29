@@ -6,3 +6,9 @@
 # receive CRLF, which would break `run:` script blocks.
 *.yml text eol=lf
 Dockerfile text eol=lf
+
+# Flyway checksums are byte-based, so migration files must check out with the
+# same line endings on every machine. Pinned to CRLF because that is what the
+# already-applied V1-V3 migrations were recorded with — changing their bytes
+# would fail Flyway validation on existing databases.
+*.sql text eol=crlf

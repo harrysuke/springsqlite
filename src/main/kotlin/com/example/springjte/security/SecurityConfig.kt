@@ -50,6 +50,9 @@ class SecurityConfig(
                     .requestMatchers("/saas/**").hasRole("ADMIN")
                     // User management mutations — admin only
                     .requestMatchers("/users/*/edit", "/users/*/update", "/users/*/delete").hasRole("ADMIN")
+                    // Book catalog — any authenticated member, matching the ASP.NET Core
+                    // "MemberOnly" policy the original BookController used
+                    .requestMatchers("/books/**", "/api/books/**").authenticated()
                     // SaaS API endpoints — admin only for mutations
                     .requestMatchers(HttpMethod.POST, "/api/users", "/api/users/*").hasRole("ADMIN")
                     .requestMatchers(HttpMethod.PUT, "/api/users/**").hasRole("ADMIN")
