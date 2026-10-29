@@ -32,10 +32,15 @@
          WHERE id = #{id}
     </select>
 
+    <!--
+      `active` comes from the entity, not a hardcoded 1: the seeded sample
+      webhook is created with active=false, and forcing it to 1 here made every
+      user create/update block on two 10s HTTP attempts to a placeholder URL.
+    -->
     <insert id="insert" parameterType="com.example.springjte.model.Webhook"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO webhooks (url, description, event_types, active, secret)
-        VALUES (#{url}, #{description}, coalesce(#{eventTypes}, '*'), 1, #{secret})
+        VALUES (#{url}, #{description}, coalesce(#{eventTypes}, '*'), #{active}, #{secret})
     </insert>
 
     <update id="update" parameterType="com.example.springjte.model.Webhook">

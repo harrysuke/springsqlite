@@ -178,7 +178,7 @@
                             <td>
                                 <div class="app-progress" style="height: 20px;">
                                     <div class="progress-bar" role="progressbar"
-                                         style="width: ${(dc.getCount() * 100 / (summary.getUsageSummary().getDailyCounts().stream().mapToLong(e -> e.getCount()).max().orElse(1)))}%">
+                                         style="width: ${(dc.getCount() * 100 / Math.max(1L, summary.getUsageSummary().getDailyCounts().stream().mapToLong(e -> e.getCount()).max().orElse(1L)))}%">
                                         ${dc.getCount()}
                                     </div>
                                 </div>

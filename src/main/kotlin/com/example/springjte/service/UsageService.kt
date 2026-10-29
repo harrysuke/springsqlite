@@ -38,18 +38,18 @@ class UsageService(private val repo: UsageEventRepository) {
         val recentEvents = repo.findRecent(20).map { toResponse(it) }
 
         val requestsByEndpoint = repo.countByEndpoint().associate {
-            (it["endpoint"] as? String ?: "unknown") to (it["cnt"] as? Long ?: 0L)
+            (it["endpoint"] as? String ?: "unknown") to count(it["cnt"])
         }
         val requestsByMethod = repo.countByMethod().associate {
-            (it["method"] as? String ?: "unknown") to (it["cnt"] as? Long ?: 0L)
+            (it["method"] as? String ?: "unknown") to count(it["cnt"])
         }
         val requestsByStatus = repo.countByStatus().associate {
-            (it["status"] as? String ?: "unknown") to (it["cnt"] as? Long ?: 0L)
+            (it["status"] as? String ?: "unknown") to count(it["cnt"])
         }
         val dailyCounts = repo.countDaily(30).map {
             DailyCount(
                 date = it["date"] as? String ?: "",
-                count = it["cnt"] as? Long ?: 0L
+                count = count(it["cnt"])
             )
         }
 
@@ -65,6 +65,17 @@ class UsageService(private val repo: UsageEventRepository) {
 
     fun findRecent(limit: Int): List<UsageEventResponse> =
         repo.findRecent(limit).map { toResponse(it) }
+
+    /**
+     * Reads an aggregate `COUNT(*)` cell out of a `resultType="java.util.Map"` row.
+     *
+     * The driver decides the Java type: SQLite hands back [Integer] while a value
+     * fits in 32 bits and only widens to [Long] above that. Casting straight to
+     * `Long` therefore yields null for ordinary counts, which used to flatten
+     * every total to 0 — and a 0 chart maximum made the dashboard divide by zero.
+     * Going through [Number] accepts either width.
+     */
+    private fun count(value: Any?): Long = (value as? Number)?.toLong() ?: 0L
 
     private fun toResponse(event: UsageEvent): UsageEventResponse = UsageEventResponse(
         id = event.id ?: 0L,

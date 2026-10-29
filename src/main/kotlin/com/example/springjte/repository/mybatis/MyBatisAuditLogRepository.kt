@@ -23,4 +23,6 @@ class MyBatisAuditLogRepository(private val mapper: AuditLogMapper) : AuditLogRe
     override fun count(): Long = mapper.count()
 
     override fun countByAction(action: String): Long = mapper.countByAction(action)
+
+    override fun countByActor(actor: String): Long = mapper.countByActor(actor)
 }

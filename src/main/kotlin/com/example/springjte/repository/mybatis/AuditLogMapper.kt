@@ -20,4 +20,6 @@ interface AuditLogMapper {
     fun count(): Long
 
     fun countByAction(@Param("action") action: String): Long
+
+    fun countByActor(@Param("actor") actor: String): Long
 }

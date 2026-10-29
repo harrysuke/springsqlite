@@ -3,20 +3,24 @@ package com.example.springjte.security
 import com.example.springjte.model.User
 import com.example.springjte.repository.UserRepository
 import com.example.springjte.service.ApiKeyService
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
+import org.springframework.security.core.Authentication
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler
-import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache
 
 @Configuration
 @EnableWebSecurity
@@ -63,7 +67,7 @@ class SecurityConfig(
             .formLogin { form ->
                 form
                     .loginPage("/login")
-                    .defaultSuccessUrl("/saas/dashboard", true)
+                    .successHandler(RoleAwareSuccessHandler())
                     .permitAll()
             }
             .logout { logout ->
@@ -91,4 +95,50 @@ class SecurityConfig(
 
     private fun rolesFor(user: User): Array<String> =
         if (user.role?.contains("ADMIN") == true) arrayOf("ADMIN") else arrayOf("USER")
+}
+
+/**
+ * Picks a landing page the freshly authenticated user is actually allowed to open.
+ *
+ * `/saas/dashboard` is admin-only, so hard-coding it as the default success URL
+ * dropped every ROLE_USER account straight onto a 403 page immediately after a
+ * perfectly valid login. Admins still land on the dashboard, everyone else on
+ * the user list.
+ *
+ * A saved request (the protected page that triggered the login redirect) wins,
+ * but only when that page is reachable by the user — otherwise a ROLE_USER who
+ * typed an `/saas/...` URL first would bounce back into a 403 loop.
+ *
+ * The handler keeps no mutable state: [HttpSessionRequestCache] stores its data
+ * in the session, so concurrent logins cannot interfere with each other.
+ */
+private class RoleAwareSuccessHandler : AuthenticationSuccessHandler {
+
+    private val requestCache = HttpSessionRequestCache()
+
+    override fun onAuthenticationSuccess(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        authentication: Authentication
+    ) {
+        val savedUrl = requestCache.getRequest(request, response)?.redirectUrl
+        requestCache.removeRequest(request, response)
+
+        val isAdmin = authentication.authorities.any { it.authority == ROLE_ADMIN }
+        val home = if (isAdmin) ADMIN_HOME else USER_HOME
+
+        val target = if (savedUrl != null && (isAdmin || !savedUrl.contains(ADMIN_AREA))) {
+            savedUrl
+        } else {
+            request.contextPath + home
+        }
+        response.sendRedirect(target)
+    }
+
+    private companion object {
+        const val ROLE_ADMIN = "ROLE_ADMIN"
+        const val ADMIN_AREA = "/saas/"
+        const val ADMIN_HOME = "/saas/dashboard"
+        const val USER_HOME = "/users"
+    }
 }

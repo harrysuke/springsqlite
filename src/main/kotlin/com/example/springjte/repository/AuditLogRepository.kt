@@ -17,4 +17,6 @@ interface AuditLogRepository {
     fun count(): Long
 
     fun countByAction(action: String): Long
+
+    fun countByActor(actor: String): Long
 }

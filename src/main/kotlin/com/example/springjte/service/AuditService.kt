@@ -52,7 +52,7 @@ class AuditService(private val repo: AuditLogRepository) {
         val safeSize = size.coerceIn(1, 200)
         val offset = (safePage - 1) * safeSize
         val items = repo.findByActor(actor, offset, safeSize).map { toResponse(it) }
-        val total = repo.count()
+        val total = repo.countByActor(actor)
         return items to total
     }
 

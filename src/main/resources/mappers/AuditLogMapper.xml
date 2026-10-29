@@ -49,4 +49,8 @@
         SELECT COUNT(*) FROM audit_logs WHERE action = #{action}
     </select>
 
+    <select id="countByActor" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM audit_logs WHERE actor = #{actor}
+    </select>
+
 </mapper>

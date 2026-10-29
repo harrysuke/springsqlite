@@ -128,5 +128,7 @@ class InMemoryAuditLogRepository : AuditLogRepository {
     override fun count(): Long = store.size.toLong()
     override fun countByAction(action: String): Long =
         store.count { it.action == action }.toLong()
+    override fun countByActor(actor: String): Long =
+        store.count { it.actor == actor }.toLong()
     fun clear() { store.clear(); ids.set(0) }
 }
